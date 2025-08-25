@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { githubService } from './services/githubService';
@@ -11,6 +11,7 @@ jest.mock('./services/githubService', () => ({
     saveData: jest.fn(),
     checkForUpdates: jest.fn(),
     validateDataStructure: jest.fn(),
+    getLatestCommit: jest.fn(),
     lastKnownSha: null,
   },
 }));
@@ -27,26 +28,41 @@ describe('Learning Ladder App', () => {
     mockGithubService.saveData.mockResolvedValue(true);
     mockGithubService.checkForUpdates.mockResolvedValue({ hasUpdates: false });
     mockGithubService.validateDataStructure.mockResolvedValue({ isValid: true, errors: [] });
+    mockGithubService.getLatestCommit.mockResolvedValue(null);
     
     // Clear localStorage
     localStorage.clear();
+    
+    // Mock timers to avoid real delays in tests
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    // Restore timers
+    jest.useRealTimers();
   });
 
   test('renders Learning Ladder title', async () => {
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Learning Ladder')).toBeInTheDocument();
     });
   });
 
-  test('shows loading state initially', () => {
-    render(<App />);
+  test('shows loading state initially', async () => {
+    await act(async () => {
+      render(<App />);
+    });
     expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
   test('displays add day button', async () => {
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Add Day')).toBeInTheDocument();
@@ -54,7 +70,9 @@ describe('Learning Ladder App', () => {
   });
 
   test('shows sync status bar with total entries', async () => {
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText(/Total entries:/)).toBeInTheDocument();
@@ -62,7 +80,9 @@ describe('Learning Ladder App', () => {
   });
 
   test('displays auto-sync toggle button', async () => {
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Auto-sync ON')).toBeInTheDocument();
@@ -70,8 +90,9 @@ describe('Learning Ladder App', () => {
   });
 
   test('can toggle auto-sync', async () => {
-    const user = userEvent.setup();
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Auto-sync ON')).toBeInTheDocument();
@@ -79,7 +100,10 @@ describe('Learning Ladder App', () => {
 
     // Find and click the auto-sync toggle button
     const autoSyncButton = screen.getByTitle(/Auto-sync enabled/);
-    await user.click(autoSyncButton);
+    
+    await act(async () => {
+      userEvent.click(autoSyncButton);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Auto-sync OFF')).toBeInTheDocument();
@@ -102,7 +126,9 @@ describe('Learning Ladder App', () => {
 
     mockGithubService.loadData.mockResolvedValue(mockData);
     
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
     
     await waitFor(() => {
       expect(mockGithubService.loadData).toHaveBeenCalled();
@@ -112,7 +138,9 @@ describe('Learning Ladder App', () => {
   test('handles GitHub service errors gracefully', async () => {
     mockGithubService.loadData.mockRejectedValue(new Error('GitHub API Error'));
     
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
     
     await waitFor(() => {
       expect(screen.getByText('Learning Ladder')).toBeInTheDocument();
