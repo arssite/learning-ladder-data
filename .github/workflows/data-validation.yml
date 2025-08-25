@@ -1,0 +1,211 @@
+name: Data Validation and CI/CD
+
+on:
+  push:
+    paths:
+      - 'data.json'
+    branches:
+      - learning-ladder-data
+  pull_request:
+    paths:
+      - 'data.json'
+    branches:
+      - learning-ladder-data
+  workflow_dispatch:
+
+jobs:
+  validate-data:
+    runs-on: ubuntu-latest
+    name: Validate Learning Data
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        
+    - name: Validate data.json structure
+      run: |
+        node -e "
+        const fs = require('fs');
+        const path = require('path');
+        
+        console.log('🔍 Validating data.json structure...');
+        
+        try {
+          // Check if data.json exists
+          if (!fs.existsSync('data.json')) {
+            console.log('⚠️  data.json not found, creating empty array');
+            fs.writeFileSync('data.json', JSON.stringify([], null, 2));
+            process.exit(0);
+          }
+          
+          // Read and parse data.json
+          const data = JSON.parse(fs.readFileSync('data.json', 'utf8'));
+          
+          // Validate structure
+          if (!Array.isArray(data)) {
+            throw new Error('data.json must contain an array');
+          }
+          
+          // Validate each learning day entry
+          data.forEach((day, index) => {
+            const required = ['id', 'dayNumber', 'date', 'title', 'description', 'attachments', 'links', 'isExpanded'];
+            required.forEach(field => {
+              if (!(field in day)) {
+                throw new Error(\`Entry \${index}: Missing required field '\${field}'\`);
+              }
+            });
+            
+            // Validate data types
+            if (typeof day.id !== 'number') throw new Error(\`Entry \${index}: 'id' must be a number\`);
+            if (typeof day.dayNumber !== 'number') throw new Error(\`Entry \${index}: 'dayNumber' must be a number\`);
+            if (typeof day.title !== 'string') throw new Error(\`Entry \${index}: 'title' must be a string\`);
+            if (typeof day.description !== 'string') throw new Error(\`Entry \${index}: 'description' must be a string\`);
+            if (!Array.isArray(day.attachments)) throw new Error(\`Entry \${index}: 'attachments' must be an array\`);
+            if (!Array.isArray(day.links)) throw new Error(\`Entry \${index}: 'links' must be an array\`);
+            if (typeof day.isExpanded !== 'boolean') throw new Error(\`Entry \${index}: 'isExpanded' must be a boolean\`);
+            
+            // Validate date format
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(day.date)) {
+              throw new Error(\`Entry \${index}: 'date' must be in YYYY-MM-DD format\`);
+            }
+          });
+          
+          console.log(\`✅ Validation successful! Found \${data.length} learning entries\`);
+          
+          // Generate summary
+          const summary = {
+            totalEntries: data.length,
+            latestEntry: data.length > 0 ? data[data.length - 1].date : null,
+            totalAttachments: data.reduce((sum, day) => sum + day.attachments.length, 0),
+            totalLinks: data.reduce((sum, day) => sum + day.links.length, 0)
+          };
+          
+          console.log('📊 Data Summary:');
+          console.log(\`   Total Entries: \${summary.totalEntries}\`);
+          console.log(\`   Latest Entry: \${summary.latestEntry || 'None'}\`);
+          console.log(\`   Total Attachments: \${summary.totalAttachments}\`);
+          console.log(\`   Total Links: \${summary.totalLinks}\`);
+          
+        } catch (error) {
+          console.error('❌ Validation failed:', error.message);
+          process.exit(1);
+        }
+        "
+        
+    - name: Run data integrity checks
+      run: |
+        node -e "
+        const fs = require('fs');
+        const data = JSON.parse(fs.readFileSync('data.json', 'utf8'));
+        
+        console.log('🔍 Running integrity checks...');
+        
+        // Check for duplicate IDs
+        const ids = data.map(day => day.id);
+        const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+        if (duplicateIds.length > 0) {
+          throw new Error(\`Duplicate IDs found: \${duplicateIds.join(', ')}\`);
+        }
+        
+        // Check for duplicate day numbers
+        const dayNumbers = data.map(day => day.dayNumber);
+        const duplicateDays = dayNumbers.filter((num, index) => dayNumbers.indexOf(num) !== index);
+        if (duplicateDays.length > 0) {
+          throw new Error(\`Duplicate day numbers found: \${duplicateDays.join(', ')}\`);
+        }
+        
+        // Validate URLs in attachments and links
+        const urlRegex = /^https?:\/\/.+/;
+        data.forEach((day, dayIndex) => {
+          day.attachments.forEach((attachment, attIndex) => {
+            if (!urlRegex.test(attachment.url)) {
+              throw new Error(\`Day \${dayIndex}, Attachment \${attIndex}: Invalid URL format\`);
+            }
+          });
+          
+          day.links.forEach((link, linkIndex) => {
+            if (!urlRegex.test(link.url)) {
+              throw new Error(\`Day \${dayIndex}, Link \${linkIndex}: Invalid URL format\`);
+            }
+          });
+        });
+        
+        console.log('✅ All integrity checks passed!');
+        "
+
+    - name: Generate data report
+      run: |
+        node -e "
+        const fs = require('fs');
+        const data = JSON.parse(fs.readFileSync('data.json', 'utf8'));
+        
+        const report = {
+          timestamp: new Date().toISOString(),
+          totalEntries: data.length,
+          recentEntries: data.slice(-5).map(day => ({
+            dayNumber: day.dayNumber,
+            date: day.date,
+            title: day.title
+          })),
+          statistics: {
+            averageAttachmentsPerDay: data.length > 0 ? (data.reduce((sum, day) => sum + day.attachments.length, 0) / data.length).toFixed(2) : 0,
+            averageLinksPerDay: data.length > 0 ? (data.reduce((sum, day) => sum + day.links.length, 0) / data.length).toFixed(2) : 0,
+            daysWithAttachments: data.filter(day => day.attachments.length > 0).length,
+            daysWithLinks: data.filter(day => day.links.length > 0).length
+          }
+        };
+        
+        fs.writeFileSync('data-report.json', JSON.stringify(report, null, 2));
+        console.log('📋 Data report generated successfully!');
+        "
+        
+    - name: Upload data report
+      uses: actions/upload-artifact@v4
+      with:
+        name: data-report
+        path: data-report.json
+        retention-days: 30
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: validate-data
+    if: github.ref == 'refs/heads/learning-ladder-data'
+    name: Deploy Frontend
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build application
+      run: npm run build
+      env:
+        REACT_APP_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REACT_APP_GITHUB_OWNER: ${{ github.repository_owner }}
+        REACT_APP_GITHUB_REPO: ${{ github.event.repository.name }}
+        REACT_APP_GITHUB_BRANCH: learning-ladder-data
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./build
+        publish_branch: gh-pages

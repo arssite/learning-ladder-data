@@ -25,7 +25,12 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "eject": "react-scripts eject"
+    "test:coverage": "craco test --coverage --watchAll=false",
+    "test:ci": "craco test --coverage --watchAll=false --testTimeout=10000",
+    "eject": "react-scripts eject",
+    "validate-data": "node scripts/validate-data.js",
+    "deploy": "npm run build && gh-pages -d build",
+    "predeploy": "npm run build"
   },
   "eslintConfig": {
     "extends": [

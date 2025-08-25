@@ -1,10 +1,21 @@
 import React, { useState } from 'react';
-import { Plus, ChevronDown, ChevronUp, Edit2, Trash2, Link, Paperclip } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, Edit2, Trash2, Link, Paperclip, RefreshCw, Wifi, WifiOff, Clock } from 'lucide-react';
 import { useGitHubData } from '../hooks/useGitHubData';
 import type { LearningDay, Attachment, ExternalLink } from '../services/githubService';
 
 export const LearningLadder: React.FC = () => {
-  const { data, loading, syncing, error, saveData } = useGitHubData();
+  const { 
+    data, 
+    loading, 
+    syncing, 
+    error, 
+    lastSync, 
+    autoSync, 
+    saveData, 
+    refreshData, 
+    toggleAutoSync, 
+    forceSyncCheck 
+  } = useGitHubData();
   const [editing, setEditing] = useState<number | null>(null);
 
   const addNewDay = () => {
@@ -49,30 +60,80 @@ export const LearningLadder: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      {error && (
+      {error && !error.includes('Data updated from remote source') && (
         <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
           {error}
         </div>
       )}
       
+      {error && error.includes('Data updated from remote source') && (
+        <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-lg">
+          ✅ Data automatically updated from GitHub
+        </div>
+      )}
+      
       <div className="max-w-3xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-4">
           <h1 className="text-3xl font-bold text-gray-900">Learning Ladder</h1>
-          <button
-            onClick={addNewDay}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-            disabled={syncing}
-          >
-            <Plus size={20} />
-            <span>Add Day</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={refreshData}
+              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              disabled={loading || syncing}
+              title="Refresh data from GitHub"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={toggleAutoSync}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                autoSync 
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title={autoSync ? 'Auto-sync enabled' : 'Auto-sync disabled'}
+            >
+              {autoSync ? <Wifi size={16} /> : <WifiOff size={16} />}
+            </button>
+            <button
+              onClick={addNewDay}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              disabled={syncing}
+            >
+              <Plus size={20} />
+              <span>Add Day</span>
+            </button>
+          </div>
         </div>
 
-        {syncing && (
-          <div className="mb-4 p-4 bg-blue-100 text-blue-700 rounded-lg">
-            Syncing changes...
+        {/* Sync Status Bar */}
+        <div className="mb-6 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-4">
+              <span className="text-gray-600">
+                Total entries: <span className="font-semibold">{data.length}</span>
+              </span>
+              {lastSync && (
+                <div className="flex items-center gap-1 text-gray-500">
+                  <Clock size={14} />
+                  <span>Last sync: {lastSync.toLocaleTimeString()}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {syncing && (
+                <div className="flex items-center gap-2 text-blue-600">
+                  <RefreshCw size={14} className="animate-spin" />
+                  <span>Syncing...</span>
+                </div>
+              )}
+              <div className={`flex items-center gap-1 ${autoSync ? 'text-green-600' : 'text-gray-400'}`}>
+                {autoSync ? <Wifi size={14} /> : <WifiOff size={14} />}
+                <span>{autoSync ? 'Auto-sync ON' : 'Auto-sync OFF'}</span>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
 
         <div className="space-y-4">
           {data.map((day) => (
